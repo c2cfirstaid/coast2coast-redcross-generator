@@ -9,7 +9,6 @@ from datetime import datetime
 st.set_page_config(page_title="Coast2coast X Red Cross Online Course Report Generator")
 st.title("Coast2coast X Red Cross Online Course Report Generator")
 
-# Location-to-facility code mapping
 facility_mapping = {
     "Mississauga": "MI", "Ajax": "AJ", "West Ottawa": "NP", "Hamilton": "HM", "London": "LO",
     "Toronto": "TO", "North York": "NY", "Richmond Hill": "RH", "Oshawa": "OSH", "Newmarket": "NM",
@@ -41,11 +40,16 @@ def filter_valid_courses(df):
     df['Location'] = df['COURSE TYPE'].apply(extract_location)
     return df
 
-def generate_red_cross_upload(df, course_id_df, template_path):
+def generate_red_cross_upload(df, course_id_df, uploaded_template):
     output_rows = []
     unmatched = []
 
-    shutil.copy(template_path, "Red_Cross_Upload_Filled.xlsx")
+    # Save uploaded template to a temporary path
+    temp_template_path = "temp_uploaded_template.xlsx"
+    with open(temp_template_path, "wb") as f:
+        f.write(uploaded_template.read())
+
+    shutil.copy(temp_template_path, "Red_Cross_Upload_Filled.xlsx")
     wb = load_workbook("Red_Cross_Upload_Filled.xlsx")
     ws = wb.active
 
