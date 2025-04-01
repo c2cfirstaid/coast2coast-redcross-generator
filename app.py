@@ -1,7 +1,10 @@
+# Web app logic for Coast2Coast CPR roster & upsell system
 
 import streamlit as st
 import pandas as pd
 import re
+import shutil
+from openpyxl import load_workbook
 
 st.set_page_config(page_title="Coast2coast X Red Cross Online Course Report Generator")
 
@@ -14,33 +17,44 @@ def extract_location(course_type):
 
 def filter_valid_courses(df):
     valid_levels = {
+        "Standard First Aid & CPR/AED Level C": "Standard First Aid Blended",
+        "Emergency First Aid CPR/AED Level C": "Emergency First Aid Blended",
+        "CPR/AED Level C": "CPR/AED",
+        "Marine Basic First Aid & CPR/AED Level C": "Marine Basic First Aid Blended"
+    }
+    df = df[df['Courses & Levels'].isin(valid_levels.keys())].copy()
+    df['Course Level'] = df['Courses & Levels'].map(valid_levels)
+    df['Course Level Code'] = df['Courses & Levels'].map({
         "Standard First Aid & CPR/AED Level C": "SFA",
         "Emergency First Aid CPR/AED Level C": "EFA",
         "CPR/AED Level C": "CPR",
         "Marine Basic First Aid & CPR/AED Level C": "MBFA"
-    }
-    df = df[df['Courses & Levels'].isin(valid_levels.keys())].copy()
-    df['Course Level Code'] = df['Courses & Levels'].map(valid_levels)
+    })
     df['Location'] = df['COURSE TYPE'].apply(extract_location)
     return df
 
-def generate_red_cross_upload(df, course_id_df):
+def generate_red_cross_upload(df, course_id_df, template_path):
     output_rows = []
     unmatched = []
+
+    shutil.copy(template_path, "Red_Cross_Upload_Filled.xlsx")
+    wb = load_workbook("Red_Cross_Upload_Filled.xlsx")
+    ws = wb.active
+
+    row_num = 2
     for _, row in df.iterrows():
         match = course_id_df[
             (course_id_df['Start Date'] == row['Start']) &
             (course_id_df['Facility'].str.endswith(f"- {row['Location']}", na=False)) &
-            (course_id_df['Course Level'].str.contains(row['Course Level Code'], case=False, na=False))
+            (course_id_df['Course Level'] == row['Course Level'])
         ]
         if len(match) == 1:
             course_id = match.iloc[0]['Course ID']
-            output_rows.append({
-                "Course Number No du cours": course_id,
-                "First Name Prénom": row['First name (participant)'],
-                "Last Name Nom de famille": row['Last name (participant)'],
-                "Email Courriel": row['Email address (participant)']
-            })
+            ws[f"A{row_num}"] = course_id
+            ws[f"B{row_num}"] = row['First name (participant)']
+            ws[f"C{row_num}"] = row['Last name (participant)']
+            ws[f"D{row_num}"] = row['Email address (participant)']
+            row_num += 1
         else:
             unmatched.append({
                 "First Name": row['First name (participant)'],
@@ -48,10 +62,12 @@ def generate_red_cross_upload(df, course_id_df):
                 "Email": row['Email address (participant)'],
                 "Date": row['Start'],
                 "Location": row['Location'],
-                "Course Level": row['Courses & Levels'],
-                "Reason": "No matching course ID" if len(match) == 0 else "Duplicate matches"
+                "Course Level": row['Course Level'],
+                "Reason": "No match" if len(match) == 0 else "Multiple matches"
             })
-    return pd.DataFrame(output_rows), pd.DataFrame(unmatched)
+
+    wb.save("Red_Cross_Upload_Filled.xlsx")
+    return "Red_Cross_Upload_Filled.xlsx", pd.DataFrame(unmatched)
 
 def generate_upsell_list(df):
     upsell_levels = {"EFA", "CPR"}
@@ -65,20 +81,22 @@ def generate_upsell_list(df):
 # File uploads
 bookeo_file = st.file_uploader("Upload Bookeo Report", type=["xlsx"])
 course_id_file = st.file_uploader("Upload Course ID List", type=["xlsx"])
+template_file = st.file_uploader("Upload Red Cross Excel Template", type=["xlsx"])
 
-if bookeo_file and course_id_file:
+if bookeo_file and course_id_file and template_file:
     bookeo_df = pd.read_excel(bookeo_file)
     course_df = pd.read_excel(course_id_file)
 
     try:
         bookeo_df_filtered = filter_valid_courses(bookeo_df)
-
-        red_cross_df, unmatched_df = generate_red_cross_upload(bookeo_df_filtered, course_df)
+        red_cross_path, unmatched_df = generate_red_cross_upload(bookeo_df_filtered, course_df, template_file)
         upsell_df = generate_upsell_list(bookeo_df_filtered)
 
         st.success("Files processed successfully!")
 
-        st.download_button("Download Red Cross Upload File", red_cross_df.to_csv(index=False), "red_cross_upload.csv")
+        with open(red_cross_path, "rb") as f:
+            st.download_button("Download Red Cross Upload File", f.read(), file_name="Red_Cross_Upload_Filled.xlsx")
+
         st.download_button("Download Upsell Call List", upsell_df.to_csv(index=False), "upsell_call_list.csv")
         st.download_button("Download Unmatched Students Report", unmatched_df.to_csv(index=False), "unmatched_students.csv")
 

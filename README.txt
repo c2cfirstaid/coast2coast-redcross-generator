@@ -2,12 +2,15 @@
 Coast2coast X Red Cross Online Course Report Generator
 =======================================================
 
-This tool lets you upload a Bookeo export and a Red Cross course ID file,
-then generates three downloadable reports:
+This tool lets you upload:
+1. A Bookeo registration report
+2. A Red Cross course ID file
+3. The official Red Cross Excel upload template
 
-1. Red Cross Upload File
-2. Upsell Call List (EFA + CPR)
-3. Unmatched Students Report
+It generates:
+- A completed Red Cross upload Excel file (template format preserved)
+- A call list of CPR and Emergency First Aid students for upselling
+- A list of unmatched students for manual follow-up
 
 ------------------------------------
 SETUP INSTRUCTIONS
@@ -29,4 +32,4 @@ SETUP INSTRUCTIONS
 6. Run the app:
    streamlit run app.py
 
-7. Your browser will open the app. Upload your files and download the reports.
+7. Your browser will open the app. Upload your files and download the results.
