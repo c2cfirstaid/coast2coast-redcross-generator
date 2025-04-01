@@ -1,26 +1,34 @@
-# Web app logic for Coast2Coast CPR roster & upsell system
 
 import streamlit as st
 import pandas as pd
 import re
 import shutil
 from openpyxl import load_workbook
+from datetime import datetime
 
 st.set_page_config(page_title="Coast2coast X Red Cross Online Course Report Generator")
-
 st.title("Coast2coast X Red Cross Online Course Report Generator")
 
-# Helper functions
+# Location-to-facility code mapping
+facility_mapping = {
+    "Mississauga": "MI", "Ajax": "AJ", "West Ottawa": "NP", "Hamilton": "HM", "London": "LO",
+    "Toronto": "TO", "North York": "NY", "Richmond Hill": "RH", "Oshawa": "OSH", "Newmarket": "NM",
+    "Oakville": "OV", "Markham": "MK", "Vaughan": "VA", "Whitby": "WH", "Scarborough": "SC",
+    "St Catharines": "STC", "Windsor": "WIN", "Edmonton South": "EDS", "Calgary": "CL", "Ottawa": "OT",
+    "Brantford": "BF", "Belleville": "BL", "Guelph": "GL", "Burlington": "BU", "Etobicoke": "ET",
+    "Kingston": "KG", "East York": "EY", "Brampton": "BR"
+}
+
 def extract_location(course_type):
     match = re.search(r'\(([^)]+)\)', str(course_type))
     return match.group(1).strip() if match else None
 
 def filter_valid_courses(df):
     valid_levels = {
-        "Standard First Aid & CPR/AED Level C": "Standard First Aid Blended",
-        "Emergency First Aid CPR/AED Level C": "Emergency First Aid Blended",
+        "Standard First Aid & CPR/AED Level C": "Standard First Aid",
+        "Emergency First Aid CPR/AED Level C": "Emergency First Aid",
         "CPR/AED Level C": "CPR/AED",
-        "Marine Basic First Aid & CPR/AED Level C": "Marine Basic First Aid Blended"
+        "Marine Basic First Aid & CPR/AED Level C": "Marine Basic First Aid"
     }
     df = df[df['Courses & Levels'].isin(valid_levels.keys())].copy()
     df['Course Level'] = df['Courses & Levels'].map(valid_levels)
@@ -41,15 +49,19 @@ def generate_red_cross_upload(df, course_id_df, template_path):
     wb = load_workbook("Red_Cross_Upload_Filled.xlsx")
     ws = wb.active
 
+    df['Start'] = pd.to_datetime(df['Start']).dt.date
+    course_id_df['Start Date'] = pd.to_datetime(course_id_df['Start Date']).dt.date
+
     row_num = 2
     for _, row in df.iterrows():
+        loc_code = facility_mapping.get(row["Location"], "")
         match = course_id_df[
-            (course_id_df['Start Date'] == row['Start']) &
-            (course_id_df['Facility'].str.endswith(f"- {row['Location']}", na=False)) &
-            (course_id_df['Course Level'] == row['Course Level'])
+            (course_id_df["Start Date"] == row["Start"]) &
+            (course_id_df["Facility"].str.endswith(f"- {loc_code}", na=False)) &
+            (course_id_df["Course Level"].str.contains(row["Course Level"], case=False, na=False))
         ]
         if len(match) == 1:
-            course_id = match.iloc[0]['Course ID']
+            course_id = match.iloc[0]["Course ID"]
             ws[f"A{row_num}"] = course_id
             ws[f"B{row_num}"] = row['First name (participant)']
             ws[f"C{row_num}"] = row['Last name (participant)']
